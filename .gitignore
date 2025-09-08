@@ -1,0 +1,18 @@
+﻿# OS/IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Env
+.env
+
+# Reports/Temp
+reports/
+*.log
+
+# Drivers (JDBC jar’ları repoya girmesin)
+drivers/*.jar
+
+# Liquibase cache
+.liquibase/

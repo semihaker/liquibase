@@ -1,0 +1,35 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-testdb
+    environment:
+      - MYSQL_DATABASE=testdb
+      - MYSQL_USER=admin
+      - MYSQL_PASSWORD=admin
+      - MYSQL_ROOT_PASSWORD=root
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uadmin", "-padmin"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  liquibase:
+    image: liquibase/liquibase:4.25.1
+    container_name: liquibase-mysql-migration
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./changelog/mysql:/liquibase/changelog/mysql
+      - ./liquibase-mysql.properties:/liquibase/liquibase-mysql.properties
+      - ./drivers:/liquibase/lib
+    working_dir: /liquibase
+
+volumes:
+  mysql_data:
+
+

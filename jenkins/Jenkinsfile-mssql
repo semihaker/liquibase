@@ -1,0 +1,101 @@
+properties([parameters([
+    file(name: 'packageZip', description: 'Upload ZIP containing docker-compose.mssql.yml, changelog/, drivers/'),
+    string(name: 'packageUrl', defaultValue: '', description: 'Optional: HTTP(S) URL to ZIP if upload fails'),
+    string(name: 'contexts', defaultValue: '', description: 'Optional: Liquibase contexts (e.g. ddl, dml, prod)')
+])])
+node {
+    stage('Prepare Workspace') {
+        sh '''
+            #!/usr/bin/env bash
+            set -eu
+            if [ -n "${BASH:-}" ]; then set -o pipefail; fi
+            set -x
+            cd "$WORKSPACE"
+            echo "Preparing workspace..."
+            ls -la || true
+            # Ensure drivers folder and MSSQL driver exist
+            mkdir -p "$WORKSPACE/drivers"
+            if [ ! -f "$WORKSPACE/drivers/mssql-jdbc-12.6.1.jre11.jar" ]; then
+                echo "MSSQL driver not found. Downloading..."
+                command -v curl >/dev/null 2>&1 || (command -v apt-get >/dev/null 2>&1 && sudo apt-get update && sudo apt-get install -y curl) || true
+                curl -L "https://repo1.maven.org/maven2/com/microsoft/sqlserver/mssql-jdbc/12.6.1.jre11/mssql-jdbc-12.6.1.jre11.jar" -o "$WORKSPACE/drivers/mssql-jdbc-12.6.1.jre11.jar"
+            fi
+            # If compose file is missing, try to find and unzip a package in workspace
+            if [ ! -f docker-compose.mssql.yml ]; then
+                CANDIDATES="${packageZip:-} $WORKSPACE/${packageZip:-} $(ls -1 *.zip 2>/dev/null | head -n 1)"
+                ZIP_FILE=""
+                for f in $CANDIDATES; do
+                    if [ -n "$f" ] && [ -f "$f" ]; then ZIP_FILE="$f"; break; fi
+                done
+                if [ -z "${ZIP_FILE:-}" ] && [ -d "${WORKSPACE}@tmp/fileParameters" ]; then
+                    ZIP_FILE=$(find "${WORKSPACE}@tmp/fileParameters" -maxdepth 1 -type f -name "*.zip" | head -n 1 || true)
+                fi
+                if [ -z "${ZIP_FILE:-}" ] && [ -d "${WORKSPACE}@tmp" ]; then
+                    ZIP_FILE=$(find "${WORKSPACE}@tmp" -maxdepth 3 -type f -name "*.zip" | head -n 1 || true)
+                fi
+                if [ -z "${ZIP_FILE:-}" ] && [ -n "${packageUrl:-}" ]; then
+                    echo "Downloading ZIP from packageUrl: $packageUrl"
+                    if ! command -v curl >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y curl || true; fi
+                    if command -v curl >/dev/null 2>&1; then
+                        curl -L "$packageUrl" -o package.zip
+                        ZIP_FILE="package.zip"
+                    elif command -v wget >/dev/null 2>&1; then
+                        wget -O package.zip "$packageUrl"
+                        ZIP_FILE="package.zip"
+                    else
+                        echo "Neither curl nor wget available to download packageUrl" >&2
+                    fi
+                fi
+                if [ -n "${ZIP_FILE:-}" ] && [ -f "$ZIP_FILE" ]; then
+                    command -v unzip >/dev/null 2>&1 || (command -v apt-get >/dev/null 2>&1 && sudo apt-get update && sudo apt-get install -y unzip) || true
+                    echo "Found ZIP at: $ZIP_FILE"
+                    unzip -o "${ZIP_FILE}" || { echo "Failed to unzip $ZIP_FILE"; exit 1; }
+                else
+                    echo "docker-compose.mssql.yml yok ve zip bulunamadı. Lütfen job'a bir zip yükleyin (packageZip) veya packageUrl ile bir adres verin, ya da SCM kullanın." >&2
+                    exit 1
+                fi
+            fi
+        '''
+    }
+    stage('Run Migrations Script') {
+        sh '''
+            #!/usr/bin/env bash
+            set -eu
+            if [ -n "${BASH:-}" ]; then set -o pipefail; fi
+            set -x
+            export COMPOSE_PROJECT_NAME=liquibase
+            cd "$WORKSPACE"
+            echo "Starting MSSQL container..."
+            docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.mssql.yml up -d mssql --remove-orphans
+            echo "Waiting for MSSQL to be ready..."
+            timeout 90 sh -c 'until docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q "SELECT 1" >/dev/null 2>&1; do sleep 2; done'
+            echo "Create database if not exists (testdb) ..."
+            docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q "IF DB_ID('testdb') IS NULL CREATE DATABASE testdb;"
+            # Prepare optional contexts
+            CTX_OPT=""
+            if [ -n "${contexts:-}" ]; then
+              CTX_OPT=" --contexts=${contexts}"
+              echo "Using contexts: ${contexts}"
+            else
+              echo "No contexts provided; running full changelog"
+            fi
+            echo "Validating Liquibase changelog..."
+            docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:sqlserver://mssql:1433;databaseName=testdb;encrypt=true;trustServerCertificate=true" --username=sa --password=Your_strong_password123 --driver=com.microsoft.sqlserver.jdbc.SQLServerDriver --classpath=/liquibase/lib --changeLogFile=changelog/mssql/changelog.xml validate${CTX_OPT}
+            echo "Applying Liquibase migrations..."
+            docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:sqlserver://mssql:1433;databaseName=testdb;encrypt=true;trustServerCertificate=true" --username=sa --password=Your_strong_password123 --driver=com.microsoft.sqlserver.jdbc.SQLServerDriver --classpath=/liquibase/lib --changeLogFile=changelog/mssql/changelog.xml update${CTX_OPT}
+            echo "Checking Liquibase status..."
+            docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:sqlserver://mssql:1433;databaseName=testdb;encrypt=true;trustServerCertificate=true" --username=sa --password=Your_strong_password123 --driver=com.microsoft.sqlserver.jdbc.SQLServerDriver --classpath=/liquibase/lib --changeLogFile=changelog/mssql/changelog.xml status${CTX_OPT}
+            echo "Running Smoke Test: Verify tables and data counts..."
+            docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -d testdb -Q "SELECT name FROM sys.tables; SELECT COUNT(*) AS user_count FROM app.users; SELECT COUNT(*) AS product_count FROM app.products;"
+            echo "Migration and reporting completed."
+        '''
+    }
+    post {
+        always {
+            sh 'docker compose --project-name liquibase -f docker-compose.mssql.yml down -v || true'
+        }
+    }
+}
+
+
+

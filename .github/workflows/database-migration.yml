@@ -1,0 +1,61 @@
+name: Database Migration
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'changelog/**'
+      - 'docker-compose.yml'
+      - 'liquibase.properties'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'changelog/**'
+      - 'docker-compose.yml'
+      - 'liquibase.properties'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Start PostgreSQL
+      run: |
+        docker-compose up -d postgres
+        
+    - name: Wait for PostgreSQL
+      run: |
+        echo "Waiting for PostgreSQL to be ready..."
+        timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U admin -d testdb; do sleep 2; done'
+        
+    - name: Run Liquibase Migration
+      run: |
+        docker-compose run --rm liquibase update
+        
+    - name: Validate Migration
+      run: |
+        docker-compose run --rm liquibase validate
+        docker-compose run --rm liquibase status
+        
+    - name: Verify Schema
+      run: |
+        docker-compose run --rm liquibase diff
+        
+    - name: Check Test Data
+      run: |
+        docker-compose exec -T postgres psql -U admin -d testdb -c "
+        SELECT 'Users: ' || COUNT(*) as user_count FROM users;
+        SELECT 'Products: ' || COUNT(*) as product_count FROM products;
+        SELECT 'Categories: ' || COUNT(*) as category_count FROM categories;
+        "
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose down
