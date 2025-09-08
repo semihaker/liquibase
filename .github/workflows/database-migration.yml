@@ -1,61 +1,87 @@
-name: Database Migration
+name: Database Migration (MSSQL)
 
 on:
   push:
     branches: [ main, develop ]
     paths:
-      - 'changelog/**'
-      - 'docker-compose.yml'
-      - 'liquibase.properties'
+      - 'changelog/mssql/**'
+      - 'docker-compose.mssql.yml'
+      - 'liquibase-mssql.properties'
   pull_request:
     branches: [ main, develop ]
     paths:
-      - 'changelog/**'
-      - 'docker-compose.yml'
-      - 'liquibase.properties'
+      - 'changelog/mssql/**'
+      - 'docker-compose.mssql.yml'
+      - 'liquibase-mssql.properties'
 
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      
-    - name: Start PostgreSQL
-      run: |
-        docker-compose up -d postgres
-        
-    - name: Wait for PostgreSQL
-      run: |
-        echo "Waiting for PostgreSQL to be ready..."
-        timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U admin -d testdb; do sleep 2; done'
-        
-    - name: Run Liquibase Migration
-      run: |
-        docker-compose run --rm liquibase update
-        
-    - name: Validate Migration
-      run: |
-        docker-compose run --rm liquibase validate
-        docker-compose run --rm liquibase status
-        
-    - name: Verify Schema
-      run: |
-        docker-compose run --rm liquibase diff
-        
-    - name: Check Test Data
-      run: |
-        docker-compose exec -T postgres psql -U admin -d testdb -c "
-        SELECT 'Users: ' || COUNT(*) as user_count FROM users;
-        SELECT 'Products: ' || COUNT(*) as product_count FROM products;
-        SELECT 'Categories: ' || COUNT(*) as category_count FROM categories;
-        "
-        
-    - name: Cleanup
-      if: always()
-      run: |
-        docker-compose down
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Show Docker versions
+        run: |
+          docker version
+          docker compose version
+
+      - name: Prepare drivers directory and JDBC
+        run: |
+          mkdir -p drivers
+          curl -L "https://repo1.maven.org/maven2/com/microsoft/sqlserver/mssql-jdbc/12.6.1.jre11/mssql-jdbc-12.6.1.jre11.jar" -o drivers/mssql-jdbc-12.6.1.jre11.jar
+
+      - name: Start MSSQL
+        run: |
+          docker compose -f docker-compose.mssql.yml up -d mssql
+
+      - name: Wait for MSSQL
+        run: |
+          echo "Waiting for MSSQL to be ready..."
+          timeout 90 bash -c 'until docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q "SELECT 1" >/dev/null 2>&1; do sleep 2; done'
+
+      - name: Create database if missing
+        run: |
+          docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q "IF DB_ID('testdb') IS NULL CREATE DATABASE testdb;"
+
+      - name: Validate Migration
+        run: |
+          docker run --rm --network liquibase_default \
+            -v "${{ github.workspace }}:/workspace" \
+            liquibase/liquibase:4.25.1 \
+            --url="jdbc:sqlserver://mssql:1433;databaseName=testdb;encrypt=true;trustServerCertificate=true" \
+            --username=sa --password=Your_strong_password123 \
+            --driver=com.microsoft.sqlserver.jdbc.SQLServerDriver \
+            --classpath=/workspace/drivers \
+            --changeLogFile=/workspace/changelog/mssql/changelog.xml validate
+
+      - name: Run Liquibase Migration
+        run: |
+          docker run --rm --network liquibase_default \
+            -v "${{ github.workspace }}:/workspace" \
+            liquibase/liquibase:4.25.1 \
+            --url="jdbc:sqlserver://mssql:1433;databaseName=testdb;encrypt=true;trustServerCertificate=true" \
+            --username=sa --password=Your_strong_password123 \
+            --driver=com.microsoft.sqlserver.jdbc.SQLServerDriver \
+            --classpath=/workspace/drivers \
+            --changeLogFile=/workspace/changelog/mssql/changelog.xml update
+
+      - name: Status
+        run: |
+          docker run --rm --network liquibase_default \
+            -v "${{ github.workspace }}:/workspace" \
+            liquibase/liquibase:4.25.1 \
+            --url="jdbc:sqlserver://mssql:1433;databaseName=testdb;encrypt=true;trustServerCertificate=true" \
+            --username=sa --password=Your_strong_password123 \
+            --driver=com.microsoft.sqlserver.jdbc.SQLServerDriver \
+            --classpath=/workspace/drivers \
+            --changeLogFile=/workspace/changelog/mssql/changelog.xml status
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose -f docker-compose.mssql.yml down -v
