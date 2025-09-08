@@ -1,9 +1,15 @@
 properties([parameters([
     file(name: 'packageZip', description: 'Upload ZIP containing docker-compose.mssql.yml, changelog/, drivers/'),
     string(name: 'packageUrl', defaultValue: '', description: 'Optional: HTTP(S) URL to ZIP if upload fails'),
-    string(name: 'contexts', defaultValue: '', description: 'Optional: Liquibase contexts (e.g. ddl, dml, prod)')
+    string(name: 'contexts', defaultValue: '', description: 'Optional: Liquibase contexts (e.g. ddl, dml, prod)'),
+    booleanParam(name: 'runOnlyDDL', defaultValue: false, description: 'Sadece DDL (şema) calistir'),
+    booleanParam(name: 'runOnlyDML', defaultValue: false, description: 'Sadece DML (veri) calistir')
 ])])
 node {
+    stage('Checkout Source') {
+        // Explicit checkout to ensure full repo is available in workspace
+        git branch: 'main', url: 'https://github.com/semihaker/liquibase.git'
+    }
     stage('Prepare Workspace') {
         sh '''
             #!/usr/bin/env bash
@@ -12,6 +18,18 @@ node {
             set -x
             cd "$WORKSPACE"
             echo "Preparing workspace..."
+            echo "Listing workspace after checkout:"
+            ls -la || true
+            # Fallback: If compose file is still missing, clone repo contents explicitly
+            if [ ! -f docker-compose.mssql.yml ]; then
+              echo "docker-compose.mssql.yml not found. Cloning repository contents into workspace..."
+              command -v git >/dev/null 2>&1 || { echo "git not found"; exit 1; }
+              TMPDIR=$(mktemp -d)
+              git clone --depth=1 --branch main https://github.com/semihaker/liquibase.git "$TMPDIR"
+              cp -R "$TMPDIR"/* . || true
+              rm -rf "$TMPDIR"
+              echo "Workspace after explicit clone:" && ls -la || true
+            fi
             ls -la || true
             # Ensure drivers folder and MSSQL driver exist
             mkdir -p "$WORKSPACE/drivers"
@@ -71,13 +89,24 @@ node {
             timeout 90 sh -c 'until docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q "SELECT 1" >/dev/null 2>&1; do sleep 2; done'
             echo "Create database if not exists (testdb) ..."
             docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q "IF DB_ID('testdb') IS NULL CREATE DATABASE testdb;"
-            # Prepare optional contexts
+            # Prepare contexts from string param
             CTX_OPT=""
             if [ -n "${contexts:-}" ]; then
               CTX_OPT=" --contexts=${contexts}"
-              echo "Using contexts: ${contexts}"
-            else
-              echo "No contexts provided; running full changelog"
+              echo "Using contexts (string): ${contexts}"
+            fi
+            # Override with boolean params if provided (mutual preference: if both true -> run all)
+            if [ "${runOnlyDDL:-false}" = "true" ] && [ "${runOnlyDML:-false}" != "true" ]; then
+              CTX_OPT=" --contexts=ddl"
+              echo "Using contexts (boolean): ddl"
+            elif [ "${runOnlyDML:-false}" = "true" ] && [ "${runOnlyDDL:-false}" != "true" ]; then
+              CTX_OPT=" --contexts=dml"
+              echo "Using contexts (boolean): dml"
+            elif [ "${runOnlyDDL:-false}" = "true" ] && [ "${runOnlyDML:-false}" = "true" ]; then
+              CTX_OPT=""
+              echo "Both runOnlyDDL and runOnlyDML are true -> run all (no contexts filter)"
+            elif [ -z "${contexts:-}" ]; then
+              echo "No contexts selected -> run all"
             fi
             echo "Validating Liquibase changelog..."
             docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:sqlserver://mssql:1433;databaseName=testdb;encrypt=true;trustServerCertificate=true" --username=sa --password=Your_strong_password123 --driver=com.microsoft.sqlserver.jdbc.SQLServerDriver --classpath=/liquibase/lib --changeLogFile=changelog/mssql/changelog.xml validate${CTX_OPT}
