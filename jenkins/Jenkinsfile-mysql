@@ -156,6 +156,10 @@ pipeline {
                 echo "Checking MySQL container status before Liquibase..."
                 docker compose --project-name liquibase -f docker-compose.mysql.yml ps mysql
                 
+                # Test workspace path before Docker run
+                echo "Testing workspace path..."
+                sh "ls -la $WORKSPACE/changelog/mysql"
+                
                 docker run --rm --network liquibase_default \
                     -v $WORKSPACE/changelog/mysql:/liquibase/changelog \
                     -v $WORKSPACE/drivers:/liquibase/classpath \
@@ -167,33 +171,33 @@ pipeline {
                     --username=admin --password=admin \
                     --driver=com.mysql.cj.jdbc.Driver \
                     --classpath=/liquibase/lib:/liquibase/classpath \
-                    --changeLogFile=changelog.sql \
+                    --changeLogFile=/liquibase/changelog/changelog.sql \
                     validate${CTX_OPT}"
                 if [ -n "${rollbackCount:-}" ]; then
                   echo "Rolling back ${rollbackCount} changesets..."
                   docker run --rm --network liquibase_default \
                     -v $WORKSPACE/changelog/mysql:/liquibase/changelog \
                     -v $WORKSPACE/drivers:/liquibase/classpath \
-                    liquibase/liquibase:4.25.1 sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib:/liquibase/classpath --changeLogFile=changelog.sql rollbackCount ${rollbackCount}${CTX_OPT}"
+                    liquibase/liquibase:4.25.1 sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib:/liquibase/classpath --changeLogFile=/liquibase/changelog/changelog.sql rollbackCount ${rollbackCount}${CTX_OPT}"
                 elif [ "${dryRunUpdate:-false}" = "true" ]; then
                   echo "Generating update SQL (dry run)..."
                   mkdir -p reports
                   docker run --rm --network liquibase_default \
                     -v $WORKSPACE/changelog/mysql:/liquibase/changelog \
                     -v $WORKSPACE/drivers:/liquibase/classpath \
-                    liquibase/liquibase:4.25.1 sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib:/liquibase/classpath --changeLogFile=changelog.sql updateSQL${CTX_OPT}" | tee reports/mysql_update.sql
+                    liquibase/liquibase:4.25.1 sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib:/liquibase/classpath --changeLogFile=/liquibase/changelog/changelog.sql updateSQL${CTX_OPT}" | tee reports/mysql_update.sql
                 else
                   echo "Applying Liquibase migrations..."
                   docker run --rm --network liquibase_default \
                     -v $WORKSPACE/changelog/mysql:/liquibase/changelog \
                     -v $WORKSPACE/drivers:/liquibase/classpath \
-                    liquibase/liquibase:4.25.1 sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib:/liquibase/classpath --changeLogFile=changelog.sql update${CTX_OPT}"
+                    liquibase/liquibase:4.25.1 sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib:/liquibase/classpath --changeLogFile=/liquibase/changelog/changelog.sql update${CTX_OPT}"
                 fi
                 echo "Checking Liquibase status..."
                 docker run --rm --network liquibase_default \
                     -v $WORKSPACE/changelog/mysql:/liquibase/changelog \
                     -v $WORKSPACE/drivers:/liquibase/classpath \
-                    liquibase/liquibase:4.25.1 sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib:/liquibase/classpath --changeLogFile=changelog.sql status${CTX_OPT}"
+                    liquibase/liquibase:4.25.1 sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib:/liquibase/classpath --changeLogFile=/liquibase/changelog/changelog.sql status${CTX_OPT}"
                 echo "Running Smoke Test: Verify tables and data counts..."
                 docker compose --project-name liquibase -f docker-compose.mysql.yml exec -T mysql sh -lc "
                 mysql -uadmin -padmin -D testdb -e \"SHOW TABLES; SELECT COUNT(*) AS user_count FROM users; SELECT COUNT(*) AS product_count FROM products; SELECT COUNT(*) AS category_count FROM categories;\"
