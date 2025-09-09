@@ -108,12 +108,9 @@ pipeline {
                 echo "Starting MySQL container..."
                 docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.mysql.yml up -d mysql --remove-orphans
                 echo "Waiting for MySQL to be ready..."
-                if docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.mysql.yml wait mysql 2>/dev/null; then
-                  echo "MySQL healthy (compose wait)"
-                else
-                  echo "compose wait not available; using ping loop (180s timeout)"
-                  timeout 180 sh -c 'until docker compose --project-name liquibase -f docker-compose.mysql.yml exec -T mysql mysqladmin ping -h localhost -uadmin -padmin --silent; do sleep 2; done'
-                fi
+                echo "Using ping loop (180s timeout) for better reliability"
+                timeout 180 sh -c 'until docker compose --project-name liquibase -f docker-compose.mysql.yml exec -T mysql mysqladmin ping -h localhost -uadmin -padmin --silent; do sleep 2; done'
+                echo "MySQL is ready!"
                 
                 # Prepare contexts from string param
                 CTX_OPT=""
