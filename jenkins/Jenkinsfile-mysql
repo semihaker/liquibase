@@ -190,7 +190,7 @@ pipeline {
     
     post {
         always {
-            sh 'docker compose --project-name liquibase -f docker-compose.mysql.yml down -v || true'
+            sh 'docker compose --project-name liquibase -f docker-compose.mysql.yml stop || true'
             archiveArtifacts artifacts: 'reports/**', fingerprint: true
         }
     }
