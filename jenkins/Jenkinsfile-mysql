@@ -165,7 +165,7 @@ pipeline {
                 mkdir -p reports
                 docker compose --project-name liquibase -f docker-compose.mysql.yml exec -T mysql sh -lc "mysql -uadmin -padmin -D testdb -B -e \"SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM products) AS products, (SELECT COUNT(*) FROM categories) AS categories;\" > /tmp/counts.tsv && tr '\\t' ',' < /tmp/counts.tsv > /tmp/table_counts.csv"
                 CID=$(docker compose --project-name liquibase -f docker-compose.mysql.yml ps -q mysql)
-                if [ -n "$CID" ]; then docker cp "$CID":/tmp/table_counts.csv "$WORKSPACE/reports/table_counts.csv"; else echo "MySQL container ID not found"; fi
+                if [ -n "$CID" ]; then docker cp "$CID":/tmp/table_counts.csv "/var/jenkins_home/workspace/Liquibase-MySQL@2/reports/table_counts.csv"; else echo "MySQL container ID not found"; fi
                 echo "Reports generated in reports/"
                 echo "Migration and reporting completed."
                 '''
