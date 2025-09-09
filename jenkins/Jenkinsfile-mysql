@@ -119,6 +119,12 @@ pipeline {
                 timeout 180 sh -c 'until docker compose --project-name liquibase -f docker-compose.mysql.yml exec -T mysql mysqladmin ping -h localhost -uadmin -padmin --silent; do sleep 2; done'
                 echo "MySQL is ready!"
                 
+                # Double-check MySQL is still running before proceeding
+                echo "Verifying MySQL container status..."
+                docker compose --project-name liquibase -f docker-compose.mysql.yml ps mysql
+                echo "Waiting 5 seconds for MySQL to fully stabilize..."
+                sleep 5
+                
                 # Prepare contexts from string param
                 CTX_OPT=""
                 if [ -n "${contexts:-}" ]; then
@@ -146,12 +152,18 @@ pipeline {
                 echo "Testing Docker mount with ls command:"
                 docker run --rm --network liquibase_default -v /var/jenkins_home/workspace/Liquibase-MySQL@2/drivers:/liquibase/lib alpine:latest ls -la /liquibase/lib/
                 echo "Running Liquibase with MySQL driver..."
+                # First, ensure MySQL is still running
+                echo "Checking MySQL container status before Liquibase..."
+                docker compose --project-name liquibase -f docker-compose.mysql.yml ps mysql
+                
                 docker run --rm --network liquibase_default \
                     -v /var/jenkins_home/workspace/Liquibase-MySQL@2/changelog:/liquibase/changelog \
                     liquibase/liquibase:4.25.1 \
                     sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && \
                     echo 'Files in changelog:' && ls -la /liquibase/changelog/ && \
                     echo 'Files in mysql subdir:' && ls -la /liquibase/changelog/mysql/ && \
+                    echo 'Testing MySQL connection from within container...' && \
+                    ping -c 3 mysql && \
                     echo 'Running Liquibase validate...' && \
                     liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
                     --username=admin --password=admin \
