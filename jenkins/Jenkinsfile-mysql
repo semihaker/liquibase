@@ -166,12 +166,13 @@ pipeline {
                     liquibase/liquibase:4.25.1 \
                     sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && \
                     echo 'Files in changelog:' && ls -la /liquibase/changelog/ && \
+                    echo 'Checking if changelog.sql exists:' && ls -la /liquibase/changelog/changelog.sql && \
                     echo 'Running Liquibase validate...' && \
                     liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
                     --username=admin --password=admin \
                     --driver=com.mysql.cj.jdbc.Driver \
                     --classpath=/liquibase/lib:/liquibase/classpath \
-                    --changeLogFile=/liquibase/changelog/changelog.sql \
+                    --changeLogFile=changelog.sql \
                     validate${CTX_OPT}"
                 if [ -n "${rollbackCount:-}" ]; then
                   echo "Rolling back ${rollbackCount} changesets..."
