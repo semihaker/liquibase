@@ -176,6 +176,7 @@ pipeline {
                     --driver=com.mysql.cj.jdbc.Driver \
                     --classpath=/liquibase/lib:/liquibase/classpath \
                     --changeLogFile=changelog.sql \
+                    --log-level=DEBUG \
                     validate${CTX_OPT}"
                 if [ -n "${rollbackCount:-}" ]; then
                   echo "Rolling back ${rollbackCount} changesets..."
