@@ -147,10 +147,11 @@ pipeline {
                 docker run --rm --network liquibase_default -v /var/jenkins_home/workspace/Liquibase-MySQL@2/drivers:/liquibase/lib alpine:latest ls -la /liquibase/lib/
                 echo "Downloading MySQL driver directly in container..."
                 docker run --rm --network liquibase_default \
-                    -v /var/jenkins_home/workspace/Liquibase-MySQL@2/changelog/mysql:/liquibase/changelog/mysql \
+                    -v /var/jenkins_home/workspace/Liquibase-MySQL@2/changelog:/liquibase/changelog \
                     liquibase/liquibase:4.25.1 \
                     sh -c "curl -L https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar -o /liquibase/lib/mysql-connector-j-8.4.0.jar && \
-                    echo 'Changelog file check:' && ls -la /liquibase/changelog/mysql/ && \
+                    echo 'Changelog file check:' && ls -la /liquibase/changelog/ && \
+                    echo 'MySQL changelog check:' && ls -la /liquibase/changelog/mysql/ && \
                     liquibase --url='jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' \
                     --username=admin --password=admin \
                     --driver=com.mysql.cj.jdbc.Driver \
