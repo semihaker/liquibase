@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset demo:001:create-users-table
+--changeset demo:001:create-users-table context:ddl
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 --rollback DROP TABLE IF EXISTS users;
 
---changeset demo:002:create-categories-table
+--changeset demo:002:create-categories-table context:ddl
 CREATE TABLE IF NOT EXISTS categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 --rollback DROP TABLE IF EXISTS categories;
 
---changeset demo:003:create-products-table
+--changeset demo:003:create-products-table context:ddl
 CREATE TABLE IF NOT EXISTS products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -33,19 +33,19 @@ CREATE TABLE IF NOT EXISTS products (
 );
 --rollback DROP TABLE IF EXISTS products;
 
---changeset demo:004:add-indexes
+--changeset demo:004:add-indexes context:ddl
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_products_name ON products(name);
 --rollback DROP INDEX idx_users_email ON users; DROP INDEX idx_products_name ON products;
 
---changeset demo:010:seed-categories
+--changeset demo:010:seed-categories context:dml
 INSERT INTO categories (name, description) VALUES
 ('Electronics', 'Electronic devices and gadgets'),
 ('Clothing', 'Apparel and fashion items'),
 ('Books', 'Books and publications');
 --rollback DELETE FROM categories WHERE name IN ('Electronics','Clothing','Books');
 
---changeset demo:011:seed-products
+--changeset demo:011:seed-products context:dml
 INSERT INTO products (name, description, price, stock_quantity, category_id) VALUES
 ('iPhone 15', 'Latest Apple smartphone', 999.99, 50, 1),
 ('Samsung Galaxy S24', 'Android flagship phone', 899.99, 45, 1),
@@ -53,13 +53,13 @@ INSERT INTO products (name, description, price, stock_quantity, category_id) VAL
 ('Clean Code Book', 'Software development best practices', 49.99, 75, 3);
 --rollback DELETE FROM products WHERE name IN ('iPhone 15','Samsung Galaxy S24','Nike Air Max','Clean Code Book');
 
---changeset demo:012:seed-users
+--changeset demo:012:seed-users context:dml
 INSERT INTO users (username, email) VALUES
 ('john_doe', 'john@example.com'),
 ('jane_smith', 'jane@example.com');
 --rollback DELETE FROM users WHERE username IN ('john_doe','jane_smith');
 
---changeset semih:020:seed-test-data
+--changeset semih:020:seed-test-data context:dml
 INSERT INTO users (username, email) VALUES
 ('test_user1','u1@example.com'),
 ('test_user2','u2@example.com');
