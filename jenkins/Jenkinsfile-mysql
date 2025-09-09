@@ -158,7 +158,7 @@ pipeline {
                 
                 # Test workspace path before Docker run
                 echo "Testing workspace path..."
-                sh "ls -la $WORKSPACE/changelog/mysql"
+                ls -la $WORKSPACE/changelog/mysql
                 
                 docker run --rm --network liquibase_default \
                     -v $WORKSPACE/changelog/mysql:/liquibase/changelog \
