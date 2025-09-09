@@ -1,10 +1,27 @@
-    properties([parameters([
-        file(name: 'packageZip', description: 'Upload ZIP containing docker-compose.mysql.yml, changelog/, drivers/'),
+pipeline {
+    agent any
+    
+    parameters {
+        file(name: 'packageZip', description: 'Upload ZIP containing docker-compose.mysql.yml, changelog/, drivers/')
         string(name: 'packageUrl', defaultValue: '', description: 'Optional: HTTP(S) URL to ZIP if upload fails')
-    ])])
-    node {
+        string(name: 'contexts', defaultValue: '', description: 'Optional: Liquibase contexts (e.g. ddl, dml, prod)')
+        booleanParam(name: 'runOnlyDDL', defaultValue: false, description: 'Sadece DDL (şema) çalıştır')
+        booleanParam(name: 'runOnlyDML', defaultValue: false, description: 'Sadece DML (veri) çalıştır')
+        booleanParam(name: 'dryRunUpdate', defaultValue: false, description: 'Gerçek update yerine SQL çıktısı üret (updateSQL)')
+        string(name: 'rollbackCount', defaultValue: '', description: 'Rollback sayısı (boş ise yapma)')
+    }
+    
+    stages {
+        stage('Checkout Source') {
+            steps {
+                // Explicit checkout to ensure full repo is available in workspace
+                git branch: 'main', url: 'https://github.com/semihaker/liquibase.git'
+            }
+        }
+        
         stage('Prepare Workspace') {
-            sh '''
+            steps {
+                sh '''
                 #!/usr/bin/env bash
                 set -eu
                 if [ -n "${BASH:-}" ]; then set -o pipefail; fi
@@ -13,8 +30,6 @@
                 echo "Preparing workspace..."
                 echo "Listing current files:"
                 ls -la || true
-                # Clean up any accidental brace-expanded directory
-                rm -rf "$WORKSPACE/{drivers,changelog" || true
                 # Ensure drivers folder and MySQL driver exist
                 mkdir -p "$WORKSPACE/drivers"
                 if [ ! -f "$WORKSPACE/drivers/mysql-connector-j-8.4.0.jar" ]; then
@@ -65,10 +80,13 @@
                         exit 1
                     fi
                 fi
-            '''
+                '''
+            }
         }
+        
         stage('Run Migrations Script') {
-            sh '''
+            steps {
+                sh '''
                 #!/usr/bin/env bash
                 set -eu
                 if [ -n "${BASH:-}" ]; then set -o pipefail; fi
@@ -79,6 +97,10 @@
                 echo "Workspace: $WORKSPACE"
                 echo "Docker info:"
                 command -v docker >/dev/null 2>&1 || { echo "docker not found"; exit 1; }
+                if ! docker compose version >/dev/null 2>&1; then
+                  echo "docker compose v2 not found (required)." >&2
+                  exit 1
+                fi
                 docker version || true
                 docker compose version || true
                 echo "Files in current directory:"
@@ -86,13 +108,49 @@
                 echo "Starting MySQL container..."
                 docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.mysql.yml up -d mysql --remove-orphans
                 echo "Waiting for MySQL to be ready..."
-                timeout 60 sh -c 'until docker compose --project-name liquibase -f docker-compose.mysql.yml exec -T mysql mysqladmin ping -h localhost -uadmin -padmin --silent; do sleep 2; done'
+                if docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.mysql.yml wait mysql 2>/dev/null; then
+                  echo "MySQL healthy (compose wait)"
+                else
+                  echo "compose wait not available; using ping loop (180s timeout)"
+                  timeout 180 sh -c 'until docker compose --project-name liquibase -f docker-compose.mysql.yml exec -T mysql mysqladmin ping -h localhost -uadmin -padmin --silent; do sleep 2; done'
+                fi
+                
+                # Prepare contexts from string param
+                CTX_OPT=""
+                if [ -n "${contexts:-}" ]; then
+                  CTX_OPT=" --contexts=${contexts}"
+                  echo "Using contexts (string): ${contexts}"
+                fi
+                
+                # Override with boolean params if provided (mutual preference: if both true -> run all)
+                if [ "${runOnlyDDL:-false}" = "true" ] && [ "${runOnlyDML:-false}" != "true" ]; then
+                  CTX_OPT=" --contexts=ddl"
+                  echo "Using contexts (boolean): ddl"
+                elif [ "${runOnlyDML:-false}" = "true" ] && [ "${runOnlyDDL:-false}" != "true" ]; then
+                  CTX_OPT=" --contexts=dml"
+                  echo "Using contexts (boolean): dml"
+                elif [ "${runOnlyDDL:-false}" = "true" ] && [ "${runOnlyDML:-false}" = "true" ]; then
+                  CTX_OPT=""
+                  echo "Both runOnlyDDL and runOnlyDML are true -> run all (no contexts filter)"
+                elif [ -z "${contexts:-}" ]; then
+                  echo "No contexts selected -> run all"
+                fi
+                
                 echo "Validating Liquibase changelog..."
-                docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mysql:/liquibase/changelog/mysql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib --changeLogFile=changelog/mysql/changelog.sql validate
-                echo "Applying Liquibase migrations..."
-                docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mysql:/liquibase/changelog/mysql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib --changeLogFile=changelog/mysql/changelog.sql update
+                docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mysql:/liquibase/changelog/mysql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib --changeLogFile=changelog/mysql/changelog.sql validate${CTX_OPT}
+                if [ -n "${rollbackCount:-}" ]; then
+                  echo "Rolling back ${rollbackCount} changesets..."
+                  docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mysql:/liquibase/changelog/mysql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib --changeLogFile=changelog/mysql/changelog.sql rollbackCount ${rollbackCount}${CTX_OPT}
+                elif [ "${dryRunUpdate:-false}" = "true" ]; then
+                  echo "Generating update SQL (dry run)..."
+                  mkdir -p reports
+                  docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mysql:/liquibase/changelog/mysql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib --changeLogFile=changelog/mysql/changelog.sql updateSQL${CTX_OPT} | tee reports/mysql_update.sql
+                else
+                  echo "Applying Liquibase migrations..."
+                  docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mysql:/liquibase/changelog/mysql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib --changeLogFile=changelog/mysql/changelog.sql update${CTX_OPT}
+                fi
                 echo "Checking Liquibase status..."
-                docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mysql:/liquibase/changelog/mysql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib --changeLogFile=changelog/mysql/changelog.sql status
+                docker run --rm --network liquibase_default -v "$WORKSPACE/changelog/mysql:/liquibase/changelog/mysql" -v "$WORKSPACE/drivers:/liquibase/lib" liquibase/liquibase:4.25.1 --url="jdbc:mysql://mysql:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" --username=admin --password=admin --driver=com.mysql.cj.jdbc.Driver --classpath=/liquibase/lib --changeLogFile=changelog/mysql/changelog.sql status${CTX_OPT}
                 echo "Running Smoke Test: Verify tables and data counts..."
                 docker compose --project-name liquibase -f docker-compose.mysql.yml exec -T mysql sh -lc "
                 mysql -uadmin -padmin -D testdb -e \"SHOW TABLES; SELECT COUNT(*) AS user_count FROM users; SELECT COUNT(*) AS product_count FROM products; SELECT COUNT(*) AS category_count FROM categories;\"
@@ -104,14 +162,17 @@
                 if [ -n "$CID" ]; then docker cp "$CID":/tmp/table_counts.csv "$WORKSPACE/reports/table_counts.csv"; else echo "MySQL container ID not found"; fi
                 echo "Reports generated in reports/"
                 echo "Migration and reporting completed."
-            '''
-        }
-        post {
-            always {
-                sh 'docker compose --project-name liquibase -f docker-compose.mysql.yml down -v || true'
-                archiveArtifacts artifacts: 'reports/**', fingerprint: true
+                '''
             }
         }
     }
+    
+    post {
+        always {
+            sh 'docker compose --project-name liquibase -f docker-compose.mysql.yml down -v || true'
+            archiveArtifacts artifacts: 'reports/**', fingerprint: true
+        }
+    }
+}
 
 

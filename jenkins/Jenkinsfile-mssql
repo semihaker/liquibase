@@ -1,17 +1,27 @@
-properties([parameters([
-    file(name: 'packageZip', description: 'Upload ZIP containing docker-compose.mssql.yml, changelog/, drivers/'),
-    string(name: 'packageUrl', defaultValue: '', description: 'Optional: HTTP(S) URL to ZIP if upload fails'),
-    string(name: 'contexts', defaultValue: '', description: 'Optional: Liquibase contexts (e.g. ddl, dml, prod)'),
-    booleanParam(name: 'runOnlyDDL', defaultValue: false, description: 'Sadece DDL (şema) calistir'),
-    booleanParam(name: 'runOnlyDML', defaultValue: false, description: 'Sadece DML (veri) calistir')
-])])
-node {
-    stage('Checkout Source') {
-        // Explicit checkout to ensure full repo is available in workspace
-        git branch: 'main', url: 'https://github.com/semihaker/liquibase.git'
+pipeline {
+    agent any
+    
+    parameters {
+        file(name: 'packageZip', description: 'Upload ZIP containing docker-compose.mssql.yml, changelog/, drivers/')
+        string(name: 'packageUrl', defaultValue: '', description: 'Optional: HTTP(S) URL to ZIP if upload fails')
+        string(name: 'contexts', defaultValue: '', description: 'Optional: Liquibase contexts (e.g. ddl, dml, prod)')
+        booleanParam(name: 'runOnlyDDL', defaultValue: false, description: 'Sadece DDL (şema) çalıştır')
+        booleanParam(name: 'runOnlyDML', defaultValue: false, description: 'Sadece DML (veri) çalıştır')
+        booleanParam(name: 'dryRunUpdate', defaultValue: false, description: 'Gerçek update yerine SQL çıktısı üret (updateSQL)')
+        string(name: 'rollbackCount', defaultValue: '', description: 'Rollback sayısı (boş ise yapma)')
     }
-    stage('Prepare Workspace') {
-        sh '''
+    
+    stages {
+        stage('Checkout Source') {
+            steps {
+                // Explicit checkout to ensure full repo is available in workspace
+                git branch: 'main', url: 'https://github.com/semihaker/liquibase.git'
+            }
+        }
+        
+        stage('Prepare Workspace') {
+            steps {
+                sh '''
             #!/usr/bin/env bash
             set -eu
             if [ -n "${BASH:-}" ]; then set -o pipefail; fi
@@ -72,23 +82,28 @@ node {
                     echo "docker-compose.mssql.yml yok ve zip bulunamadı. Lütfen job'a bir zip yükleyin (packageZip) veya packageUrl ile bir adres verin, ya da SCM kullanın." >&2
                     exit 1
                 fi
-            fi
-        '''
-    }
-    stage('Run Migrations Script') {
-        sh '''
+                fi
+                '''
+            }
+        }
+        
+        stage('Run Migrations Script') {
+            steps {
+                sh '''
             #!/usr/bin/env bash
             set -eu
             if [ -n "${BASH:-}" ]; then set -o pipefail; fi
             set -x
             export COMPOSE_PROJECT_NAME=liquibase
             cd "$WORKSPACE"
+            # SA sifresi icin ortam degiskeni tercih et; yoksa default
+            SA_PWD="${MSSQL_SA_PASSWORD:-Your_strong_password123}"
             echo "Starting MSSQL container..."
             docker compose --project-name "$COMPOSE_PROJECT_NAME" -f docker-compose.mssql.yml up -d mssql --remove-orphans
             echo "Waiting for MSSQL to be ready..."
-            timeout 90 sh -c 'until docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q "SELECT 1" >/dev/null 2>&1; do sleep 2; done'
+            timeout 180 sh -c 'until docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P '"$SA_PWD"' -Q "SELECT 1" >/dev/null 2>&1; do sleep 2; done'
             echo "Create database if not exists (testdb) ..."
-            docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -Q "IF DB_ID('testdb') IS NULL CREATE DATABASE testdb;"
+            docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PWD" -Q "IF DB_ID('testdb') IS NULL CREATE DATABASE testdb;"
             # Prepare contexts from string param
             CTX_OPT=""
             if [ -n "${contexts:-}" ]; then
@@ -108,20 +123,50 @@ node {
             elif [ -z "${contexts:-}" ]; then
               echo "No contexts selected -> run all"
             fi
-            echo "Validating Liquibase changelog (compose run)..."
-            docker compose --project-name liquibase -f docker-compose.mssql.yml run --rm liquibase \
-              --defaultsFile=/liquibase/liquibase-mssql.properties validate${CTX_OPT}
-            echo "Applying Liquibase migrations..."
-            docker compose --project-name liquibase -f docker-compose.mssql.yml run --rm liquibase \
-              --defaultsFile=/liquibase/liquibase-mssql.properties update${CTX_OPT}
+            echo "Validating Liquibase changelog..."
+            docker run --rm --network liquibase_default \
+              -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" \
+              -v "$WORKSPACE/drivers:/liquibase/lib" \
+              -v "$WORKSPACE/liquibase-mssql.properties:/liquibase/liquibase-mssql.properties" \
+              liquibase/liquibase:4.25.1 --defaultsFile=/liquibase/liquibase-mssql.properties validate${CTX_OPT}
+            # Rollback mi, dry-run mi, normal update mi?
+            if [ -n "${rollbackCount:-}" ]; then
+              echo "Rolling back ${rollbackCount} changesets..."
+              docker run --rm --network liquibase_default \
+                -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" \
+                -v "$WORKSPACE/drivers:/liquibase/lib" \
+                -v "$WORKSPACE/liquibase-mssql.properties:/liquibase/liquibase-mssql.properties" \
+                liquibase/liquibase:4.25.1 --defaultsFile=/liquibase/liquibase-mssql.properties rollbackCount ${rollbackCount}${CTX_OPT}
+            elif [ "${dryRunUpdate:-false}" = "true" ]; then
+              echo "Generating update SQL (dry run)..."
+              mkdir -p reports
+              docker run --rm --network liquibase_default \
+                -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" \
+                -v "$WORKSPACE/drivers:/liquibase/lib" \
+                -v "$WORKSPACE/liquibase-mssql.properties:/liquibase/liquibase-mssql.properties" \
+                liquibase/liquibase:4.25.1 --defaultsFile=/liquibase/liquibase-mssql.properties updateSQL${CTX_OPT} | tee reports/mssql_update.sql
+            else
+              echo "Applying Liquibase migrations..."
+              docker run --rm --network liquibase_default \
+                -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" \
+                -v "$WORKSPACE/drivers:/liquibase/lib" \
+                -v "$WORKSPACE/liquibase-mssql.properties:/liquibase/liquibase-mssql.properties" \
+                liquibase/liquibase:4.25.1 --defaultsFile=/liquibase/liquibase-mssql.properties update${CTX_OPT}
+            fi
             echo "Checking Liquibase status..."
-            docker compose --project-name liquibase -f docker-compose.mssql.yml run --rm liquibase \
-              --defaultsFile=/liquibase/liquibase-mssql.properties status${CTX_OPT}
+            docker run --rm --network liquibase_default \
+              -v "$WORKSPACE/changelog/mssql:/liquibase/changelog/mssql" \
+              -v "$WORKSPACE/drivers:/liquibase/lib" \
+              -v "$WORKSPACE/liquibase-mssql.properties:/liquibase/liquibase-mssql.properties" \
+              liquibase/liquibase:4.25.1 --defaultsFile=/liquibase/liquibase-mssql.properties status${CTX_OPT}
             echo "Running Smoke Test: Verify tables and data counts..."
-            docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Your_strong_password123 -d testdb -Q "SELECT name FROM sys.tables; SELECT COUNT(*) AS user_count FROM app.users; SELECT COUNT(*) AS product_count FROM app.products;"
+            docker compose --project-name liquibase -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PWD" -d testdb -Q "SELECT name FROM sys.tables; SELECT COUNT(*) AS user_count FROM app.users; SELECT COUNT(*) AS product_count FROM app.products;"
             echo "Migration and reporting completed."
-        '''
+                '''
+            }
+        }
     }
+    
     post {
         always {
             sh 'docker compose --project-name liquibase -f docker-compose.mssql.yml down -v || true'

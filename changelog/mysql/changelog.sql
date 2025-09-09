@@ -59,3 +59,12 @@ INSERT INTO users (username, email) VALUES
 ('jane_smith', 'jane@example.com');
 --rollback DELETE FROM users WHERE username IN ('john_doe','jane_smith');
 
+--changeset semih:020:seed-test-data
+INSERT INTO users (username, email) VALUES
+('test_user1','u1@example.com'),
+('test_user2','u2@example.com');
+
+INSERT INTO products (name, description, price, stock_quantity) VALUES
+('Test Product semih','sample', 9.99, 10),
+('Test Product B','sample', 19.99, 5);
+--rollback DELETE FROM users WHERE username IN ('test_user1','test_user2'); DELETE FROM products WHERE name IN ('Test Product A','Test Product B');
