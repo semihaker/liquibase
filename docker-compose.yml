@@ -27,6 +27,7 @@ services:
       - ./liquibase.properties:/liquibase/liquibase.properties
       - ./drivers:/liquibase/lib
     working_dir: /liquibase
+    command: --defaultsFile=/liquibase/liquibase.properties update
 
 volumes:
   postgres_data:
