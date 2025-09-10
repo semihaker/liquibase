@@ -1,0 +1,3 @@
+[33m0a8ceaa[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m fix: Jenkins MySQL pipeline changelog path issues
+[33mbb33e80[m fix: Recreate clean MySQL changelog.sql file
+[33m35aa65f[m fix: Add DEBUG logging to Liquibase validate command
