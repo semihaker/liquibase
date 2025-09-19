@@ -1,0 +1,33 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: mssql-testdb
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Admin123!
+      - MSSQL_DB=testdb
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+  liquibase:
+    image: liquibase/liquibase:4.25.1
+    container_name: liquibase-mssql-migration
+    depends_on:
+      mssql:
+        condition: service_healthy
+    volumes:
+      - ./changelog:/liquibase/changelog
+      - ./liquibase-mssql.properties:/liquibase/liquibase-mssql.properties
+      - ./drivers:/liquibase/lib
+    working_dir: /liquibase
+    command: --defaultsFile=/liquibase/liquibase-mssql.properties update
+
+volumes:
+  mssql_data:

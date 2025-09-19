@@ -1,0 +1,33 @@
+services:
+  oracle:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: oracle-testdb
+    environment:
+      - ORACLE_PASSWORD=admin
+      - ORACLE_DATABASE=testdb
+    ports:
+      - "1521:1521"
+    healthcheck:
+      test: ["CMD-SHELL", "sqlplus -L admin/admin@localhost:1521/XE -S -c 'SELECT 1 FROM DUAL;'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+
+  liquibase:
+    image: liquibase/liquibase:4.25.1
+    container_name: liquibase-oracle-migration
+    depends_on:
+      oracle:
+        condition: service_healthy
+    volumes:
+      - ./changelog:/liquibase/changelog
+      - ./liquibase-oracle.properties:/liquibase/liquibase-oracle.properties
+      - ./drivers:/liquibase/lib
+    working_dir: /liquibase
+    command: --defaultsFile=/liquibase/liquibase-oracle.properties update
+
+volumes:
+  oracle_data:

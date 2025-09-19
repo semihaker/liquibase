@@ -1,0 +1,158 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage('Start MSSQL') {
+            steps {
+                sh '''
+                    echo "MSSQL container başlatılıyor..."
+                    
+                    # docker-compose.mssql.yml oluştur
+                    cat > docker-compose.mssql.yml << 'EOF'
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql-testdb
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Admin123!
+      - MSSQL_DB=testdb
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+volumes:
+  mssql_data:
+EOF
+                    
+                    docker compose -f docker-compose.mssql.yml up -d mssql
+                    sleep 30
+                    echo "MSSQL hazır!"
+                '''
+            }
+        }
+        
+        stage('Run Liquibase') {
+            steps {
+                sh '''
+                    echo "Liquibase migration çalıştırılıyor..."
+                    
+                    # Liquibase container'ında her şeyi oluştur ve çalıştır
+                    docker run --rm --network liquibase_default --user root \
+                        liquibase/liquibase:4.25.1 \
+                        sh -c "
+                        # MSSQL driver'ı indir
+                        curl -L https://repo1.maven.org/maven2/com/microsoft/sqlserver/mssql-jdbc/12.6.1.jre11/mssql-jdbc-12.6.1.jre11.jar -o /liquibase/lib/mssql-jdbc-12.6.1.jre11.jar
+                        
+                        # Changelog dosyasını oluştur
+                        mkdir -p /liquibase/changelog
+                        cat > /liquibase/changelog/changelog.sql << 'CHANGELOG_EOF'
+--liquibase formatted sql
+
+--changeset admin:1
+CREATE TABLE users (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    username NVARCHAR(50) NOT NULL UNIQUE,
+    email NVARCHAR(100) NOT NULL UNIQUE,
+    created_at DATETIME2 DEFAULT GETDATE()
+);
+
+--changeset admin:2
+CREATE TABLE categories (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    name NVARCHAR(50) NOT NULL UNIQUE,
+    description NVARCHAR(MAX),
+    created_at DATETIME2 DEFAULT GETDATE()
+);
+
+--changeset admin:3
+CREATE TABLE products (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    name NVARCHAR(100) NOT NULL,
+    description NVARCHAR(MAX),
+    price DECIMAL(10,2) NOT NULL,
+    category_id INT,
+    created_at DATETIME2 DEFAULT GETDATE(),
+    FOREIGN KEY (category_id) REFERENCES categories(id)
+);
+
+--changeset admin:4
+INSERT INTO categories (name, description) VALUES 
+('Electronics', 'Electronic devices'),
+('Clothing', 'Fashion items'),
+('Books', 'Books and literature');
+
+--changeset admin:5
+INSERT INTO users (username, email) VALUES 
+('admin', 'admin@example.com'),
+('user1', 'user1@example.com');
+
+--changeset admin:6
+INSERT INTO products (name, description, price, category_id) VALUES 
+('Laptop', 'High-performance laptop', 999.99, 1),
+('T-Shirt', 'Cotton t-shirt', 19.99, 2),
+('Programming Book', 'Learn programming', 49.99, 3);
+CHANGELOG_EOF
+                        
+                        # Liquibase çalıştır
+                        liquibase --url='jdbc:sqlserver://mssql:1433;databaseName=testdb;encrypt=false;trustServerCertificate=true' \
+                        --username=sa \
+                        --password=Admin123! \
+                        --driver=com.microsoft.sqlserver.jdbc.SQLServerDriver \
+                        --classpath=/liquibase/lib \
+                        --changeLogFile=changelog/changelog.sql \
+                        update
+                        "
+                    
+                    echo "Migration tamamlandı!"
+                '''
+            }
+        }
+        
+        stage('Show Database Structure') {
+            steps {
+                sh '''
+                    echo "=== VERİTABANI YAPISI ==="
+                    echo "Tablolar:"
+                    docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'"
+                    
+                    echo ""
+                    echo "=== USERS TABLOSU ==="
+                    docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'users'"
+                    docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q "SELECT * FROM users"
+                    
+                    echo ""
+                    echo "=== CATEGORIES TABLOSU ==="
+                    docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'categories'"
+                    docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q "SELECT * FROM categories"
+                    
+                    echo ""
+                    echo "=== PRODUCTS TABLOSU ==="
+                    docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'products'"
+                    docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q "SELECT * FROM products"
+                '''
+            }
+        }
+    }
+    
+    post {
+        always {
+            sh '''
+                echo "Cleanup yapılıyor..."
+                docker compose -f docker-compose.mssql.yml down
+            '''
+        }
+        success {
+            echo "MSSQL migration başarıyla tamamlandı!"
+        }
+        failure {
+            echo "MSSQL migration başarısız!"
+        }
+    }
+}
