@@ -4,7 +4,7 @@
 -- TEST VERİTABANI - SADECE DML CHANGESET'LERİ
 -- ========================================
 
---changeset semih:201:insert-test-customers-data
+--changeset admin:201:insert-test-customers-data context:dml
 INSERT INTO test_customers (customer_code, first_name, last_name, email, phone, birth_date) VALUES
 ('CUST001', 'Ahmet', 'Yılmaz', 'ahmet.yilmaz@email.com', '+90 555 123 4567', '1985-03-15'),
 ('CUST002', 'Fatma', 'Demir', 'fatma.demir@email.com', '+90 555 234 5678', '1990-07-22'),
@@ -14,7 +14,7 @@ INSERT INTO test_customers (customer_code, first_name, last_name, email, phone, 
 
 --rollback DELETE FROM test_customers WHERE customer_code IN ('CUST001', 'CUST002', 'CUST003', 'CUST004', 'CUST005');
 
---changeset semih:202:insert-test-addresses-data
+--changeset admin:202:insert-test-addresses-data context:dml
 INSERT INTO test_addresses (customer_id, address_type, street_address, city, state, postal_code, country, is_default) VALUES
 (1, 'both', 'Atatürk Caddesi No:123', 'İstanbul', 'İstanbul', '34000', 'Turkey', true),
 (1, 'shipping', 'İstiklal Caddesi No:456', 'İstanbul', 'İstanbul', '34001', 'Turkey', false),
@@ -25,7 +25,7 @@ INSERT INTO test_addresses (customer_id, address_type, street_address, city, sta
 
 --rollback DELETE FROM test_addresses WHERE customer_id IN (1, 2, 3, 4, 5);
 
---changeset semih:203:insert-test-orders-data
+--changeset admin:203:insert-test-orders-data context:dml
 INSERT INTO test_orders (order_number, customer_id, order_date, delivery_date, total_amount, tax_amount, discount_amount, final_amount, status, payment_method) VALUES
 ('ORD-2024-001', 1, '2024-01-15 10:30:00', '2024-01-18', 299.99, 29.99, 0, 329.98, 'delivered', 'credit_card'),
 ('ORD-2024-002', 2, '2024-01-16 14:20:00', '2024-01-19', 149.99, 14.99, 15.00, 149.98, 'shipped', 'bank_transfer'),
@@ -35,7 +35,7 @@ INSERT INTO test_orders (order_number, customer_id, order_date, delivery_date, t
 
 --rollback DELETE FROM test_orders WHERE order_number IN ('ORD-2024-001', 'ORD-2024-002', 'ORD-2024-003', 'ORD-2024-004', 'ORD-2024-005');
 
---changeset semih:204:insert-test-order-items-data
+--changeset admin:204:insert-test-order-items-data context:dml
 INSERT INTO test_order_items (order_id, product_id, quantity, unit_price, discount_percent, total_price) VALUES
 (1, 1, 1, 299.99, 0, 299.99),
 (2, 3, 1, 129.99, 10, 116.99),

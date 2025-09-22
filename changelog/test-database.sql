@@ -4,7 +4,7 @@
 -- TEST VERİTABANI - DDL CHANGESET'LERİ
 -- ========================================
 
---changeset semih:101:create-test-customers-table
+--changeset admin:101:create-test-customers-table context:ddl
 CREATE TABLE test_customers (
     id SERIAL PRIMARY KEY,
     customer_code VARCHAR(20) NOT NULL UNIQUE,
@@ -20,7 +20,7 @@ CREATE TABLE test_customers (
 
 --rollback DROP TABLE test_customers;
 
---changeset semih:102:create-test-orders-table
+--changeset admin:102:create-test-orders-table context:ddl
 CREATE TABLE test_orders (
     id SERIAL PRIMARY KEY,
     order_number VARCHAR(30) NOT NULL UNIQUE,
@@ -42,7 +42,7 @@ CREATE TABLE test_orders (
 
 --rollback DROP TABLE test_orders;
 
---changeset semih:103:create-test-order-items-table
+--changeset admin:103:create-test-order-items-table context:ddl
 CREATE TABLE test_order_items (
     id SERIAL PRIMARY KEY,
     order_id INTEGER NOT NULL REFERENCES test_orders(id) ON DELETE CASCADE,
@@ -56,7 +56,7 @@ CREATE TABLE test_order_items (
 
 --rollback DROP TABLE test_order_items;
 
---changeset semih:104:create-test-addresses-table
+--changeset admin:104:create-test-addresses-table context:ddl
 CREATE TABLE test_addresses (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER NOT NULL REFERENCES test_customers(id) ON DELETE CASCADE,
@@ -76,7 +76,7 @@ CREATE TABLE test_addresses (
 -- İNDEKS VE KISITLAMALAR
 -- ========================================
 
---changeset semih:105:add-test-indexes
+--changeset admin:105:add-test-indexes context:ddl
 CREATE INDEX idx_test_customers_email ON test_customers(email);
 CREATE INDEX idx_test_customers_customer_code ON test_customers(customer_code);
 CREATE INDEX idx_test_orders_customer_id ON test_orders(customer_id);
@@ -95,7 +95,7 @@ CREATE INDEX idx_test_addresses_customer_id ON test_addresses(customer_id);
 --rollback DROP INDEX idx_test_order_items_product_id;
 --rollback DROP INDEX idx_test_addresses_customer_id;
 
---changeset semih:106:add-test-constraints
+--changeset admin:106:add-test-constraints context:ddl
 ALTER TABLE test_orders ADD CONSTRAINT chk_test_order_status 
 CHECK (status IN ('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned'));
 
@@ -113,7 +113,7 @@ CHECK (birth_date <= CURRENT_DATE);
 -- VIEW'LAR
 -- ========================================
 
---changeset semih:107:create-test-views
+--changeset admin:107:create-test-views context:ddl
 CREATE VIEW test_customer_summary AS
 SELECT 
     c.id,
@@ -153,7 +153,7 @@ GROUP BY o.id, o.order_number, c.customer_code, c.first_name, c.last_name, o.ord
 -- FONKSİYONLAR
 -- ========================================
 
---changeset semih:108:create-test-functions
+--changeset admin:108:create-test-functions context:ddl
 CREATE OR REPLACE FUNCTION test_calculate_order_total(order_id_param INTEGER)
 RETURNS DECIMAL AS $$
 DECLARE
@@ -194,7 +194,7 @@ $$ LANGUAGE plpgsql;
 -- TEST VERİTABANI - DML CHANGESET'LERİ
 -- ========================================
 
---changeset semih:109:insert-test-customers
+--changeset admin:109:insert-test-customers context:dml
 INSERT INTO test_customers (customer_code, first_name, last_name, email, phone, birth_date) VALUES
 ('CUST001', 'Ahmet', 'Yılmaz', 'ahmet.yilmaz@email.com', '+90 555 123 4567', '1985-03-15'),
 ('CUST002', 'Fatma', 'Demir', 'fatma.demir@email.com', '+90 555 234 5678', '1990-07-22'),
@@ -204,7 +204,7 @@ INSERT INTO test_customers (customer_code, first_name, last_name, email, phone, 
 
 --rollback DELETE FROM test_customers WHERE customer_code IN ('CUST001', 'CUST002', 'CUST003', 'CUST004', 'CUST005');
 
---changeset semih:110:insert-test-addresses
+--changeset admin:110:insert-test-addresses context:dml
 INSERT INTO test_addresses (customer_id, address_type, street_address, city, state, postal_code, country, is_default) VALUES
 (1, 'both', 'Atatürk Caddesi No:123', 'İstanbul', 'İstanbul', '34000', 'Turkey', true),
 (1, 'shipping', 'İstiklal Caddesi No:456', 'İstanbul', 'İstanbul', '34001', 'Turkey', false),
@@ -215,7 +215,7 @@ INSERT INTO test_addresses (customer_id, address_type, street_address, city, sta
 
 --rollback DELETE FROM test_addresses WHERE customer_id IN (1, 2, 3, 4, 5);
 
---changeset semih:111:insert-test-orders
+--changeset admin:111:insert-test-orders context:dml
 INSERT INTO test_orders (order_number, customer_id, order_date, delivery_date, total_amount, tax_amount, discount_amount, final_amount, status, payment_method) VALUES
 ('ORD-2024-001', 1, '2024-01-15 10:30:00', '2024-01-18', 299.99, 29.99, 0, 329.98, 'delivered', 'credit_card'),
 ('ORD-2024-002', 2, '2024-01-16 14:20:00', '2024-01-19', 149.99, 14.99, 15.00, 149.98, 'shipped', 'bank_transfer'),
@@ -225,7 +225,7 @@ INSERT INTO test_orders (order_number, customer_id, order_date, delivery_date, t
 
 --rollback DELETE FROM test_orders WHERE order_number IN ('ORD-2024-001', 'ORD-2024-002', 'ORD-2024-003', 'ORD-2024-004', 'ORD-2024-005');
 
---changeset semih:112:insert-test-order-items
+--changeset admin:112:insert-test-order-items context:dml
 INSERT INTO test_order_items (order_id, product_id, quantity, unit_price, discount_percent, total_price) VALUES
 (1, 1, 1, 299.99, 0, 299.99),
 (2, 3, 1, 129.99, 10, 116.99),
@@ -241,7 +241,7 @@ INSERT INTO test_order_items (order_id, product_id, quantity, unit_price, discou
 -- TRIGGER'LAR
 -- ========================================
 
---changeset semih:113:create-test-triggers
+--changeset admin:113:create-test-triggers context:ddl
 CREATE OR REPLACE FUNCTION test_update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
