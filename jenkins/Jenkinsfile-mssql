@@ -55,23 +55,25 @@ EOF
                         cat > /liquibase/changelog/changelog.sql << 'CHANGELOG_EOF'
 --liquibase formatted sql
 
---changeset admin:1
+--changeset admin:001:create-users-table context:ddl
 CREATE TABLE users (
     id INT IDENTITY(1,1) PRIMARY KEY,
     username NVARCHAR(50) NOT NULL UNIQUE,
     email NVARCHAR(100) NOT NULL UNIQUE,
     created_at DATETIME2 DEFAULT GETDATE()
 );
+--rollback DROP TABLE users;
 
---changeset admin:2
+--changeset admin:002:create-categories-table context:ddl
 CREATE TABLE categories (
     id INT IDENTITY(1,1) PRIMARY KEY,
     name NVARCHAR(50) NOT NULL UNIQUE,
     description NVARCHAR(MAX),
     created_at DATETIME2 DEFAULT GETDATE()
 );
+--rollback DROP TABLE categories;
 
---changeset admin:3
+--changeset admin:003:create-products-table context:ddl
 CREATE TABLE products (
     id INT IDENTITY(1,1) PRIMARY KEY,
     name NVARCHAR(100) NOT NULL,
@@ -81,23 +83,27 @@ CREATE TABLE products (
     created_at DATETIME2 DEFAULT GETDATE(),
     FOREIGN KEY (category_id) REFERENCES categories(id)
 );
+--rollback DROP TABLE products;
 
---changeset admin:4
+--changeset admin:010:seed-categories context:dml
 INSERT INTO categories (name, description) VALUES 
 ('Electronics', 'Electronic devices'),
 ('Clothing', 'Fashion items'),
 ('Books', 'Books and literature');
+--rollback DELETE FROM categories WHERE name IN ('Electronics', 'Clothing', 'Books');
 
---changeset admin:5
+--changeset admin:011:seed-users context:dml
 INSERT INTO users (username, email) VALUES 
 ('admin', 'admin@example.com'),
 ('user1', 'user1@example.com');
+--rollback DELETE FROM users WHERE username IN ('admin', 'user1');
 
---changeset admin:6
+--changeset admin:012:seed-products context:dml
 INSERT INTO products (name, description, price, category_id) VALUES 
 ('Laptop', 'High-performance laptop', 999.99, 1),
 ('T-Shirt', 'Cotton t-shirt', 19.99, 2),
 ('Programming Book', 'Learn programming', 49.99, 3);
+--rollback DELETE FROM products WHERE name IN ('Laptop', 'T-Shirt', 'Programming Book');
 CHANGELOG_EOF
                         
                         # Liquibase çalıştır
