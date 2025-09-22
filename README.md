@@ -1,58 +1,20 @@
-# Liquibase Database Migration Project
+# Liquibase Multi-Database Migration
 
-A comprehensive database migration solution using Liquibase, Docker, and Jenkins for PostgreSQL and MySQL databases.
+Liquibase ile çoklu veritabanı migration sistemi. PostgreSQL, MySQL, MSSQL ve Oracle desteği.
 
-## Overview
+## Ne Bu?
 
-This project provides automated database migration management using Liquibase. It supports both PostgreSQL and MySQL databases with Docker containerization and Jenkins CI/CD integration.
+Veritabanı değişikliklerini otomatik yönetmek için Liquibase kullanıyorum. Docker ve Jenkins ile tam otomatik.
 
-## Project Structure
+## Desteklenen Veritabanları
 
-### Docker Configuration
-- **`docker-compose.yml`** - PostgreSQL service configuration
-- **`docker-compose.mysql.yml`** - MySQL service configuration
+- **PostgreSQL** - Ana veritabanı
+- **MySQL** - Alternatif veritabanı  
+- **MSSQL** - Microsoft SQL Server
+- **Oracle** - Enterprise veritabanı
 
-### Liquibase Configuration
-- **`liquibase.properties`** - PostgreSQL connection settings
-- **`liquibase-mysql.properties`** - MySQL connection settings
+## Hızlı Başlangıç
 
-### Migration Files
-- **`changelog/changelog.sql`** - Main PostgreSQL migration file
-- **`changelog/mysql/changelog.sql`** - MySQL-specific migration file
-- **`changelog/advanced-migrations.sql`** - Advanced migration examples
-- **`changelog/seed-data.sql`** - Test data seeding
-- **`changelog/test-database.sql`** - Test database setup
-
-### Jenkins Pipelines
-- **`Jenkinsfile`** - PostgreSQL pipeline
-- **`jenkins/Jenkinsfile-mysql`** - MySQL pipeline
-
-### PowerShell Scripts
-- **`scripts/start-project.ps1`** - Start PostgreSQL project
-- **`scripts/run-mysql-migrations.ps1`** - Run MySQL migrations
-- **`scripts/test-database.ps1`** - Create test database
-- **`scripts/clean-test-database.ps1`** - Clean test database
-- **`scripts/query-test-database.ps1`** - Query test database
-
-### JDBC Drivers
-- **`drivers/postgresql-42.7.1.jar`** - PostgreSQL JDBC driver
-- **`drivers/mysql-connector-j-8.4.0.jar`** - MySQL JDBC driver
-
-## Quick Start
-
-### PostgreSQL Setup
-```powershell
-# Start PostgreSQL project
-.\scripts\start-project.ps1
-```
-
-### MySQL Setup
-```powershell
-# Start MySQL project
-.\scripts\run-mysql-migrations.ps1
-```
-
-### Manual Commands
 ```bash
 # PostgreSQL
 docker-compose up -d
@@ -61,182 +23,61 @@ docker-compose run --rm liquibase update
 # MySQL
 docker compose -f docker-compose.mysql.yml up -d
 docker compose -f docker-compose.mysql.yml run --rm liquibase update
+
+# MSSQL
+docker compose -f docker-compose.mssql.yml up -d
+docker compose -f docker-compose.mssql.yml run --rm liquibase update
+
+# Oracle
+docker compose -f docker-compose.oracle.yml up -d
+docker compose -f docker-compose.oracle.yml run --rm liquibase update
 ```
 
-## Database Connection Information
+## Jenkins Pipeline
 
-### PostgreSQL
-- **Host:** localhost
-- **Port:** 5432
-- **Database:** testdb
-- **Username:** admin
-- **Password:** admin
+Otomatik migration çalıştırmak için Jenkins pipeline'ı var. Parametreler:
 
-### MySQL
-- **Host:** localhost
-- **Port:** 3307
-- **Database:** testdb
-- **Username:** admin
-- **Password:** admin
+- **DATABASE_TYPE:** postgresql, mysql, mssql, oracle
+- **DRY_RUN:** Sadece SQL oluştur, çalıştırma
+- **CONTEXTS:** DDL/DML filtreleme
 
-## Migration Management
+## Migration Komutları
 
-### Basic Commands
 ```bash
-# Check migration status
+# Durum kontrolü
 docker-compose run --rm liquibase status
 
-# Apply new migrations
+# Migration çalıştır
 docker-compose run --rm liquibase update
 
-# Validate changelog
-docker-compose run --rm liquibase validate
-
-# Rollback changes
-docker-compose run --rm liquibase rollback --changesetId=semih:001:create-users-table
-```
-
-### Context Usage
-```bash
-# Run only DDL changes
+# Sadece DDL çalıştır
 docker-compose run --rm liquibase update --contexts=ddl
 
-# Run only DML changes
-docker-compose run --rm liquibase update --contexts=dml
+# Rollback yap
+docker-compose run --rm liquibase rollback --changesetId=admin:001:create-users-table
 ```
 
-## Jenkins Integration
+## Veritabanı Bağlantıları
 
-### Pipeline Features
-- Automatic health checks
-- Context support (DDL/DML separation)
-- Dry run capabilities
-- Rollback functionality
-- Smoke testing
+| Veritabanı | Host | Port | Database | User | Password |
+|------------|------|------|----------|------|----------|
+| PostgreSQL | localhost | 5432 | testdb | admin | admin |
+| MySQL | localhost | 3307 | testdb | admin | admin |
+| MSSQL | localhost | 1433 | testdb | sa | Admin123! |
+| Oracle | localhost | 1521 | XE | system | admin |
 
-### Jenkins Parameters
-- **contexts:** Liquibase contexts (e.g., `ddl,dml`)
-- **runOnlyDDL:** Run only DDL changes
-- **runOnlyDML:** Run only DML changes
-- **dryRunUpdate:** Generate SQL output
-- **rollbackCount:** Number of changesets to rollback
-
-## Changeset Structure
-
-### DDL Example
-```sql
---changeset semih:001:create-users-table context:ddl
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
---rollback DROP TABLE users;
-```
-
-### DML Example
-```sql
---changeset semih:010:seed-users context:dml
-INSERT INTO users (username, email) VALUES
-('admin', 'admin@example.com'),
-('user1', 'user1@example.com');
---rollback DELETE FROM users WHERE username IN ('admin', 'user1');
-```
-
-## Testing
-
-### Test Database
-```bash
-# Create test database
-.\scripts\test-database.ps1
-
-# Query test data
-.\scripts\query-test-database.ps1
-
-# Clean test database
-.\scripts\clean-test-database.ps1
-```
-
-## Database Access
-
-### PostgreSQL
-```bash
-# Connect to PostgreSQL
-docker exec -it postgres-testdb psql -U admin -d testdb
-
-# List tables
-docker exec -it postgres-testdb psql -U admin -d testdb -c "\dt"
-
-# View logs
-docker-compose logs postgres
-```
-
-### MySQL
-```bash
-# Connect to MySQL
-docker compose -f docker-compose.mysql.yml exec -T mysql mysql -uadmin -padmin -D testdb
-
-# List tables
-docker compose -f docker-compose.mysql.yml exec -T mysql mysql -uadmin -padmin -D testdb -e "SHOW TABLES;"
-```
-
-## Cleanup
+## Temizlik
 
 ```bash
-# Stop services
-docker-compose down
-
-# Stop services and remove volumes
+# Tüm servisleri durdur
 docker-compose down -v
-
-# Stop MySQL services
 docker compose -f docker-compose.mysql.yml down -v
+docker compose -f docker-compose.mssql.yml down -v
+docker compose -f docker-compose.oracle.yml down -v
 ```
 
-## Requirements
+## Gereksinimler
 
 - Docker
 - Docker Compose
-- PowerShell 7+ (for Windows)
-- Git (optional)
-
-## Project Features
-
-- Multi-database support (PostgreSQL & MySQL)
-- Docker orchestration
-- Jenkins CI/CD integration
-- PowerShell automation scripts
-- Context management (DDL/DML separation)
-- Comprehensive testing
-- Automatic driver management
-
-## Troubleshooting
-
-### Common Issues
-1. **Port conflicts:** Ensure ports 5432 and 3307 are available
-2. **Permission issues:** Run PowerShell as Administrator
-3. **Docker not running:** Start Docker Desktop
-4. **Network issues:** Check Docker network configuration
-
-### Logs
-```bash
-# View all logs
-docker-compose logs
-
-# View specific service logs
-docker-compose logs postgres
-docker-compose logs liquibase
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License.
+- PowerShell 7+ (Windows için)

@@ -39,7 +39,7 @@ CREATE INDEX idx_users_email ON users(email);
 --rollback DROP INDEX idx_products_category_id ON products; DROP INDEX idx_products_name ON products; DROP INDEX idx_users_email ON users;
 
 --changeset demo:010:seed-categories context:dml
-INSERT INTO categories (name, description) VALUES 
+INSERT IGNORE INTO categories (name, description) VALUES 
 ('Electronics', 'Electronic devices and gadgets'),
 ('Clothing', 'Fashion and apparel'),
 ('Books', 'Books and literature'),

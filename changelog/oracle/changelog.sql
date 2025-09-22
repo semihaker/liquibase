@@ -31,35 +31,39 @@ CREATE TABLE products (
 --rollback DROP TABLE products;
 
 --changeset admin:004:add-indexes context:ddl
-CREATE INDEX idx_products_category_id ON products(category_id);
-CREATE INDEX idx_products_name ON products(name);
-CREATE INDEX idx_users_email ON users(email);
+-- Indexes will be created manually if needed
 --rollback DROP INDEX idx_products_category_id; DROP INDEX idx_products_name; DROP INDEX idx_users_email;
 
 --changeset admin:010:seed-categories context:dml
-INSERT ALL
-INTO categories (name, description) VALUES ('Electronics', 'Electronic devices and gadgets')
-INTO categories (name, description) VALUES ('Clothing', 'Fashion and apparel')
-INTO categories (name, description) VALUES ('Books', 'Books and literature')
-INTO categories (name, description) VALUES ('Home & Garden', 'Home improvement and gardening supplies')
-SELECT 1 FROM DUAL;
+MERGE INTO categories c
+USING (SELECT 'Electronics' as name, 'Electronic devices and gadgets' as description FROM DUAL
+       UNION ALL SELECT 'Clothing', 'Fashion and apparel' FROM DUAL
+       UNION ALL SELECT 'Books', 'Books and literature' FROM DUAL
+       UNION ALL SELECT 'Home & Garden', 'Home improvement and gardening supplies' FROM DUAL) s
+ON (c.name = s.name)
+WHEN NOT MATCHED THEN
+  INSERT (name, description) VALUES (s.name, s.description);
 --rollback DELETE FROM categories WHERE name IN ('Electronics', 'Clothing', 'Books', 'Home & Garden');
 
 --changeset admin:011:seed-products context:dml
-INSERT ALL
-INTO products (name, description, price, category_id) VALUES ('Laptop', 'High-performance laptop computer', 999.99, 1)
-INTO products (name, description, price, category_id) VALUES ('Smartphone', 'Latest model smartphone', 699.99, 1)
-INTO products (name, description, price, category_id) VALUES ('T-Shirt', 'Cotton t-shirt', 19.99, 2)
-INTO products (name, description, price, category_id) VALUES ('Jeans', 'Blue denim jeans', 49.99, 2)
-INTO products (name, description, price, category_id) VALUES ('Programming Book', 'Learn to code', 29.99, 3)
-INTO products (name, description, price, category_id) VALUES ('Garden Tools', 'Complete garden tool set', 79.99, 4)
-SELECT 1 FROM DUAL;
+MERGE INTO products p
+USING (SELECT 'Laptop' as name, 'High-performance laptop computer' as description, 999.99 as price, 1 as category_id FROM DUAL
+       UNION ALL SELECT 'Smartphone', 'Latest model smartphone', 699.99, 1 FROM DUAL
+       UNION ALL SELECT 'T-Shirt', 'Cotton t-shirt', 19.99, 2 FROM DUAL
+       UNION ALL SELECT 'Jeans', 'Blue denim jeans', 49.99, 2 FROM DUAL
+       UNION ALL SELECT 'Programming Book', 'Learn to code', 29.99, 3 FROM DUAL
+       UNION ALL SELECT 'Garden Tools', 'Complete garden tool set', 79.99, 4 FROM DUAL) s
+ON (p.name = s.name)
+WHEN NOT MATCHED THEN
+  INSERT (name, description, price, category_id) VALUES (s.name, s.description, s.price, s.category_id);
 --rollback DELETE FROM products WHERE name IN ('Laptop', 'Smartphone', 'T-Shirt', 'Jeans', 'Programming Book', 'Garden Tools');
 
 --changeset admin:012:seed-users context:dml
-INSERT ALL
-INTO users (username, email) VALUES ('admin', 'admin@example.com')
-INTO users (username, email) VALUES ('user1', 'user1@example.com')
-INTO users (username, email) VALUES ('user2', 'user2@example.com')
-SELECT 1 FROM DUAL;
+MERGE INTO users u
+USING (SELECT 'admin' as username, 'admin@example.com' as email FROM DUAL
+       UNION ALL SELECT 'user1', 'user1@example.com' FROM DUAL
+       UNION ALL SELECT 'user2', 'user2@example.com' FROM DUAL) s
+ON (u.username = s.username)
+WHEN NOT MATCHED THEN
+  INSERT (username, email) VALUES (s.username, s.email);
 --rollback DELETE FROM users WHERE username IN ('admin', 'user1', 'user2');

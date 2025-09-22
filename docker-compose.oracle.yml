@@ -1,20 +1,22 @@
 services:
   oracle:
-    image: gvenzl/oracle-xe:21-slim
+    image: gvenzl/oracle-xe:18-slim
     container_name: oracle-testdb
     environment:
       - ORACLE_PASSWORD=admin
       - ORACLE_DATABASE=testdb
+      - ORACLE_USER=admin
+      - ORACLE_USER_PASSWORD=admin
     ports:
       - "1521:1521"
-    healthcheck:
-      test: ["CMD-SHELL", "sqlplus -L admin/admin@localhost:1521/XE -S -c 'SELECT 1 FROM DUAL;'"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s
     volumes:
       - oracle_data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD-SHELL", "sqlplus -L system/admin@localhost:1521/XE -S -c 'SELECT 1 FROM DUAL;' || exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
 
   liquibase:
     image: liquibase/liquibase:4.25.1
