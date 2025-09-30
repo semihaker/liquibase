@@ -168,4 +168,3 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-**⚠️ ÖNEMLİ**: Asla gerçek production credential'larını `.env.example` dosyasına ekleme!
