@@ -3,16 +3,16 @@ services:
     image: gvenzl/oracle-xe:18-slim
     container_name: oracle-testdb
     environment:
-      - ORACLE_PASSWORD=admin
-      - ORACLE_DATABASE=testdb
-      - ORACLE_USER=admin
-      - ORACLE_USER_PASSWORD=admin
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - ORACLE_DATABASE=${ORACLE_DB:-testdb}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_USER_PASSWORD=${ORACLE_PASSWORD}
     ports:
       - "1521:1521"
     volumes:
       - oracle_data:/opt/oracle/oradata
     healthcheck:
-      test: ["CMD-SHELL", "sqlplus -L system/admin@localhost:1521/XE -S -c 'SELECT 1 FROM DUAL;' || exit 0"]
+      test: ["CMD-SHELL", "sqlplus -L system/${ORACLE_PASSWORD}@localhost:1521/XE -S -c 'SELECT 1 FROM DUAL;' || exit 0"]
       interval: 30s
       timeout: 10s
       retries: 5

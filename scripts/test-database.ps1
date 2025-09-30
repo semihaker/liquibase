@@ -3,6 +3,9 @@
 
 Write-Host "🚀 Test Veritabanı Migration'ları Başlatılıyor..." -ForegroundColor Green
 
+# .env dosyasını yükle
+. "$PSScriptRoot\load-env.ps1"
+
 # PostgreSQL'in hazır olduğunu kontrol et
 Write-Host "📊 PostgreSQL durumu kontrol ediliyor..." -ForegroundColor Yellow
 docker-compose ps postgres
@@ -17,13 +20,13 @@ docker-compose run --rm liquibase status
 
 # Test veritabanına bağlan ve tabloları listele
 Write-Host "🔍 Test veritabanı tabloları listeleniyor..." -ForegroundColor Yellow
-docker exec -it postgres-testdb psql -U admin -d testdb -c "\dt"
+docker exec -it postgres-testdb psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -c "\dt"
 
 # Test verilerini görüntüle
 Write-Host "📊 Test verileri görüntüleniyor..." -ForegroundColor Yellow
-docker exec -it postgres-testdb psql -U admin -d testdb -c "SELECT COUNT(*) as customer_count FROM test_customers;"
-docker exec -it postgres-testdb psql -U admin -d testdb -c "SELECT COUNT(*) as order_count FROM test_orders;"
-docker exec -it postgres-testdb psql -U admin -d testdb -c "SELECT COUNT(*) as address_count FROM test_addresses;"
+docker exec -it postgres-testdb psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -c "SELECT COUNT(*) as customer_count FROM test_customers;"
+docker exec -it postgres-testdb psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -c "SELECT COUNT(*) as order_count FROM test_orders;"
+docker exec -it postgres-testdb psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -c "SELECT COUNT(*) as address_count FROM test_addresses;"
 
 Write-Host "✅ Test veritabanı başarıyla oluşturuldu!" -ForegroundColor Green
-Write-Host "💡 Test veritabanına bağlanmak için: docker exec -it postgres-testdb psql -U admin -d testdb" -ForegroundColor Cyan
+Write-Host "💡 Test veritabanına bağlanmak için: docker exec -it postgres-testdb psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB" -ForegroundColor Cyan

@@ -2,6 +2,9 @@ param(
     [switch]$Recreate
 )
 
+# .env dosyasını yükle
+. "$PSScriptRoot\load-env.ps1"
+
 # Compose dosyasi yolunu script konumuna gore sabitle
 $ScriptRoot = $PSScriptRoot
 $RepoRoot = Split-Path -Parent $ScriptRoot
@@ -16,7 +19,7 @@ if ($Recreate) {
 docker compose -f "$ComposeFile" up -d mysql
 
 Write-Host "[MySQL] Hazirlik bekleniyor..." -ForegroundColor Yellow
-docker compose -f "$ComposeFile" exec -T mysql mysqladmin ping -h localhost -uadmin -padmin --silent | Out-Null
+docker compose -f "$ComposeFile" exec -T mysql mysqladmin ping -h localhost -u$env:MYSQL_USER -p$env:MYSQL_PASSWORD --silent | Out-Null
 
 Write-Host "[Liquibase] validate" -ForegroundColor Green
 docker compose -f "$ComposeFile" run --rm liquibase --defaultsFile=/liquibase/liquibase-mysql.properties validate
@@ -34,7 +37,7 @@ SHOW TABLES;
 SELECT COUNT(*) AS user_count FROM users;
 SELECT COUNT(*) AS product_count FROM products;
 '@
-docker compose -f "$ComposeFile" exec -T mysql sh -lc "mysql -uadmin -padmin -D testdb -e \"$($sql -replace '"','\\"' -replace "`r?`n", ' ')\""
+docker compose -f "$ComposeFile" exec -T mysql sh -lc "mysql -u$env:MYSQL_USER -p$env:MYSQL_PASSWORD -D $env:MYSQL_DB -e \"$($sql -replace '"','\\"' -replace "`r?`n", ' ')\""
 
 Write-Host "[Done]" -ForegroundColor Cyan
 

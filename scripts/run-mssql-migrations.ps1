@@ -3,6 +3,9 @@
 
 Write-Host "Liquibase MSSQL Projesi Başlatılıyor..." -ForegroundColor Green
 
+# .env dosyasını yükle
+. "$PSScriptRoot\load-env.ps1"
+
 # Docker servislerini başlat
 Write-Host "Docker servisleri başlatılıyor..." -ForegroundColor Yellow
 docker compose -f docker-compose.mssql.yml up -d
@@ -17,7 +20,7 @@ do {
     Write-Host "Deneme $attempt/$maxAttempts..." -ForegroundColor Cyan
 
     try {
-        $result = docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Admin123! -Q "SELECT 1" 2>$null
+        $result = docker compose -f docker-compose.mssql.yml exec -T mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U $env:MSSQL_USER -P $env:MSSQL_PASSWORD -Q "SELECT 1" 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Host "MSSQL hazır!" -ForegroundColor Green
             break
@@ -49,10 +52,10 @@ if ($LASTEXITCODE -eq 0) {
     # Veritabanı bağlantı bilgilerini göster
     Write-Host "`nVeritabanı Bağlantı Bilgileri:" -ForegroundColor Cyan
     Write-Host "Host: localhost" -ForegroundColor White
-    Write-Host "Port: 1433" -ForegroundColor White
-    Write-Host "Database: testdb" -ForegroundColor White
-    Write-Host "Username: sa" -ForegroundColor White
-    Write-Host "Password: Admin123!" -ForegroundColor White
+    Write-Host "Port: $env:MSSQL_PORT" -ForegroundColor White
+    Write-Host "Database: $env:MSSQL_DB" -ForegroundColor White
+    Write-Host "Username: $env:MSSQL_USER" -ForegroundColor White
+    Write-Host "Password: ********" -ForegroundColor White
 
     Write-Host "`nSQL Server Management Studio veya başka bir MSSQL client ile bağlanabilirsiniz." -ForegroundColor Green
 } else {

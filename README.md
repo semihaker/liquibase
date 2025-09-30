@@ -15,6 +15,20 @@ Veritabanı değişikliklerini otomatik yönetmek için Liquibase kullanıyorum.
 
 ## Hızlı Başlangıç
 
+### 1. Ortam Değişkenlerini Ayarla
+
+Güvenlik için credential'lar `.env` dosyasında tutuluyor:
+
+```bash
+# .env.example dosyasını kopyala
+cp .env.example .env
+
+# .env dosyasını düzenle ve kendi credential'larını gir
+# Not: .env dosyası .gitignore'da olduğu için Git'e pushllanmayacak
+```
+
+### 2. Migration'ları Çalıştır
+
 ```bash
 # PostgreSQL
 docker-compose up -d
@@ -59,12 +73,16 @@ docker-compose run --rm liquibase rollback --changesetId=admin:001:create-users-
 
 ## Veritabanı Bağlantıları
 
+Tüm veritabanı credential'ları `.env` dosyasından okunur. Varsayılan değerler:
+
 | Veritabanı | Host | Port | Database | User | Password |
 |------------|------|------|----------|------|----------|
-| PostgreSQL | localhost | 5432 | testdb | admin | admin |
-| MySQL | localhost | 3307 | testdb | admin | admin |
-| MSSQL | localhost | 1433 | testdb | sa | Admin123! |
-| Oracle | localhost | 1521 | XE | system | admin |
+| PostgreSQL | localhost | 5432 | testdb | `.env`'den okunur | `.env`'den okunur |
+| MySQL | localhost | 3307 | testdb | `.env`'den okunur | `.env`'den okunur |
+| MSSQL | localhost | 1433 | testdb | `.env`'den okunur | `.env`'den okunur |
+| Oracle | localhost | 1521 | XE | `.env`'den okunur | `.env`'den okunur |
+
+**⚠️ Güvenlik Notu:** `.env` dosyası Git'e pushllanmaz. Lütfen kendi ortamınızda güvenli değerler kullanın.
 
 ## Temizlik
 
@@ -81,3 +99,73 @@ docker compose -f docker-compose.oracle.yml down -v
 - Docker
 - Docker Compose
 - PowerShell 7+ (Windows için)
+
+## Güvenlik
+
+### Credential Yönetimi
+
+Bu proje environment variable'lar kullanarak credential'ları güvenli tutar:
+
+1. **`.env` Dosyası**: Tüm hassas bilgiler burada
+2. **`.env.example` Şablonu**: Genel repo için örnek şablon
+3. **`.gitignore`**: `.env` dosyasının Git'e pushlanmasını engeller
+
+### Environment Variables
+
+`.env` dosyasında şu değişkenler kullanılıyor:
+
+#### PostgreSQL
+- `POSTGRES_HOST` - PostgreSQL host adresi
+- `POSTGRES_PORT` - PostgreSQL port numarası
+- `POSTGRES_DB` - Veritabanı adı
+- `POSTGRES_USER` - Kullanıcı adı
+- `POSTGRES_PASSWORD` - Şifre
+
+#### MySQL
+- `MYSQL_HOST` - MySQL host adresi
+- `MYSQL_PORT` - MySQL port numarası
+- `MYSQL_DB` - Veritabanı adı
+- `MYSQL_USER` - Kullanıcı adı
+- `MYSQL_PASSWORD` - Şifre
+
+#### MS SQL Server
+- `MSSQL_HOST` - MSSQL host adresi
+- `MSSQL_PORT` - MSSQL port numarası
+- `MSSQL_DB` - Veritabanı adı
+- `MSSQL_USER` - Kullanıcı adı
+- `MSSQL_PASSWORD` - Şifre
+
+#### Oracle
+- `ORACLE_HOST` - Oracle host adresi
+- `ORACLE_PORT` - Oracle port numarası
+- `ORACLE_SERVICE` - Oracle service adı
+- `ORACLE_USER` - Kullanıcı adı
+- `ORACLE_PASSWORD` - Şifre
+
+### PowerShell Scriptleri
+
+Tüm PowerShell scriptleri `.env` dosyasını otomatik yükler:
+
+```powershell
+# Script başlangıcında .env yükleniyor
+. "$PSScriptRoot\load-env.ps1"
+```
+
+### İlk Kurulum
+
+```bash
+# 1. Repoyu klonla
+git clone <repo-url>
+
+# 2. .env dosyasını oluştur
+cp .env.example .env
+
+# 3. .env dosyasını düzenle - KENDİ ŞİFRELERİNİ GİR!
+# Windows: notepad .env
+# Linux/Mac: nano .env
+
+# 4. Docker servisleri başlat
+docker-compose up -d
+```
+
+**⚠️ ÖNEMLİ**: Asla gerçek production credential'larını `.env.example` dosyasına ekleme!

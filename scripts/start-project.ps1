@@ -3,6 +3,9 @@
 
 Write-Host "Liquibase PostgreSQL Projesi Baslatiliyor..." -ForegroundColor Green
 
+# .env dosyasını yükle
+. "$PSScriptRoot\load-env.ps1"
+
 # Docker servislerini baslat
 Write-Host "Docker servisleri baslatiliyor..." -ForegroundColor Yellow
 docker-compose up -d
@@ -17,7 +20,7 @@ do {
     Write-Host "Deneme $attempt/$maxAttempts..." -ForegroundColor Cyan
     
     try {
-        $result = docker-compose exec -T postgres pg_isready -U admin -d testdb 2>$null
+        $result = docker-compose exec -T postgres pg_isready -U $env:POSTGRES_USER -d $env:POSTGRES_DB 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Host "PostgreSQL hazir!" -ForegroundColor Green
             break
@@ -49,10 +52,10 @@ if ($LASTEXITCODE -eq 0) {
     # Veritabani baglanti bilgilerini goster
     Write-Host "`nVeritabani Baglanti Bilgileri:" -ForegroundColor Cyan
     Write-Host "Host: localhost" -ForegroundColor White
-    Write-Host "Port: 5432" -ForegroundColor White
-    Write-Host "Database: testdb" -ForegroundColor White
-    Write-Host "Username: admin" -ForegroundColor White
-    Write-Host "Password: admin" -ForegroundColor White
+    Write-Host "Port: $env:POSTGRES_PORT" -ForegroundColor White
+    Write-Host "Database: $env:POSTGRES_DB" -ForegroundColor White
+    Write-Host "Username: $env:POSTGRES_USER" -ForegroundColor White
+    Write-Host "Password: ********" -ForegroundColor White
     
     Write-Host "`npgAdmin veya baska bir PostgreSQL client ile baglanabilirsiniz." -ForegroundColor Green
 } else {

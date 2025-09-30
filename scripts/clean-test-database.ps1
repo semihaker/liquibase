@@ -3,6 +3,9 @@
 
 Write-Host "🧹 Test Veritabanı Temizleniyor..." -ForegroundColor Yellow
 
+# .env dosyasını yükle
+. "$PSScriptRoot\load-env.ps1"
+
 # Test veritabanı migration'larını geri al
 Write-Host "🔄 Test veritabanı migration'ları geri alınıyor..." -ForegroundColor Yellow
 
@@ -27,7 +30,7 @@ docker-compose run --rm liquibase status
 
 # Tabloları listele (test tabloları silinmiş olmalı)
 Write-Host "🔍 Veritabanı tabloları listeleniyor..." -ForegroundColor Yellow
-docker exec -it postgres-testdb psql -U admin -d testdb -c "\dt"
+docker exec -it postgres-testdb psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -c "\dt"
 
 Write-Host "✅ Test veritabanı başarıyla temizlendi!" -ForegroundColor Green
 Write-Host "💡 Test veritabanını yeniden oluşturmak için: .\scripts\test-database.ps1" -ForegroundColor Cyan

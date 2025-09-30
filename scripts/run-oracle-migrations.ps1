@@ -3,6 +3,9 @@
 
 Write-Host "Liquibase Oracle Projesi Başlatılıyor..." -ForegroundColor Green
 
+# .env dosyasını yükle
+. "$PSScriptRoot\load-env.ps1"
+
 # Docker servislerini başlat
 Write-Host "Docker servisleri başlatılıyor..." -ForegroundColor Yellow
 docker compose -f docker-compose.oracle.yml up -d
@@ -17,7 +20,7 @@ do {
     Write-Host "Deneme $attempt/$maxAttempts..." -ForegroundColor Cyan
 
     try {
-        $result = docker compose -f docker-compose.oracle.yml exec -T oracle sqlplus -L admin/admin@localhost:1521/XE -S -c "SELECT 1 FROM DUAL;" 2>$null
+        $result = docker compose -f docker-compose.oracle.yml exec -T oracle sqlplus -L $env:ORACLE_USER/$env:ORACLE_PASSWORD@localhost:$env:ORACLE_PORT/$env:ORACLE_SERVICE -S -c "SELECT 1 FROM DUAL;" 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Host "Oracle hazır!" -ForegroundColor Green
             break
@@ -49,10 +52,10 @@ if ($LASTEXITCODE -eq 0) {
     # Veritabanı bağlantı bilgilerini göster
     Write-Host "`nVeritabanı Bağlantı Bilgileri:" -ForegroundColor Cyan
     Write-Host "Host: localhost" -ForegroundColor White
-    Write-Host "Port: 1521" -ForegroundColor White
-    Write-Host "Database: XE" -ForegroundColor White
-    Write-Host "Username: admin" -ForegroundColor White
-    Write-Host "Password: admin" -ForegroundColor White
+    Write-Host "Port: $env:ORACLE_PORT" -ForegroundColor White
+    Write-Host "Database: $env:ORACLE_SERVICE" -ForegroundColor White
+    Write-Host "Username: $env:ORACLE_USER" -ForegroundColor White
+    Write-Host "Password: ********" -ForegroundColor White
 
     Write-Host "`nOracle SQL Developer veya başka bir Oracle client ile bağlanabilirsiniz." -ForegroundColor Green
 } else {
